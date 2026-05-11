@@ -1,317 +1,618 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import json
-import requests
+import numpy as np
 
-# -------------------------------
-# 1. ΚΑΘΑΡΟ ΛΕΥΚΟ ΦΟΝΤΟ ΓΙΑ ΟΛΗ ΤΗΝ ΕΦΑΡΜΟΓΗ
-# -------------------------------
-st.set_page_config(page_title="Εκπαιδευτικά Δεδομένα - Αργολίδα & Μεσσηνία", layout="wide")
+# Page config
+st.set_page_config(
+    page_title="Οπτικοποίηση Σχολικών Δεδομένων",
+    page_icon="🏫",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# CSS για λευκό φόντο σε ολόκληρο το app
+# Custom CSS
 st.markdown("""
-    <style>
-        .stApp {
-            background-color: gray;
-        }
-        /* Προαιρετικά: λευκό και για sidebar */
-        .css-1d391kg, .css-163ttbj, .eczjsme11 {
-            background-color: white;
-        }
-    </style>
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .sub-header {
+        font-size: 1.2rem;
+        color: #555;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f0f2f6;
+        border-radius: 4px 4px 0 0;
+        padding: 10px 20px;
+        font-weight: 600;
+    }
+</style>
 """, unsafe_allow_html=True)
 
-st.title("Interactive Dashboard: Μαθητές & Εκπαιδευτικοί ΠΔΕ Πελοποννήσου")
-st.markdown("")
-
-# -------------------------------
-# 2. ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΛΕΥΚΟ ΦΟΝΤΟ ΣΕ ΟΛΑ ΤΑ PLOTLY ΔΙΑΓΡΑΜΜΑΤΑ
-# -------------------------------
-def white_theme(fig):
-    """Εφαρμόζει λευκό φόντο σε όλο το γράφημα και στους άξονες."""
-    fig.update_layout(
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font_color='black'
-    )
-    # Κάνει και τους άξονες λευκούς (αν θέλετε γραμμές, μπορείτε να αφήσετε το grid)
-    fig.update_xaxes(gridcolor='gray', showgrid=True, gridwidth=0.5)
-    fig.update_yaxes(gridcolor='gray', showgrid=True, gridwidth=0.5)
-    return fig
-
-# -------------------------------
-# (Η υπόλοιπη συνάρτηση load_data και φιλτράρισμα παραμένει ΑΚΡΙΒΩΣ ίδια)
-# -------------------------------
 @st.cache_data
 def load_data():
-    try:
-        df = pd.read_excel("Query1.xlsx", sheet_name=0)
-    except FileNotFoundError:
-        uploaded_file = st.file_uploader("Ανεβάστε το Query1.xlsx", type=["xlsx"])
-        if uploaded_file is not None:
-            df = pd.read_excel(uploaded_file, sheet_name=0)
-        else:
-            st.error("Δεν βρέθηκε το αρχείο Query1.xlsx. Παρακαλώ ανεβάστε το.")
-            st.stop()
-    
-    if "ΑΦΜ" in df.columns:
-        df["ΑΦΜ"] = df["ΑΦΜ"].astype(str).str.replace('="', '').str.replace('"', '').str.strip()
-    
-    numeric_cols = ["Αριθμός Τμημάτων", "Αγόρια", "Κορίτσια", "Σύνολο", 
-                    "Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης", "Α Ανάθεση Συνολικά", 
-                    "Β Ανάθεση Συνολικά", "Γ Ανάθεση Συνολικά", "Προσθ Τμημ Συνολικά", 
-                    "Άλλες Αναθέσεις Συνολικά"]
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    
-    df["Περιφερειακή Ενότητα"] = df["Περιφερειακή Ενότητα"].str.upper()
+    df = pd.read_excel("Query1.xlsx")
+    # Clean AFM column
+    df['ΑΦΜ'] = df['ΑΦΜ'].astype(str).str.replace('"="', '').str.replace('""', '"').str.strip('"')
+    # Fill NaN for numeric assignment columns with 0 for visualization
+    for col in ['Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 'Γ Ανάθεση Συνολικά', 
+                'Προσθ Τμημ Συνολικά', 'Άλλες Αναθέσεις Συνολικά']:
+        df[col] = df[col].fillna(0)
     return df
 
 df = load_data()
 
-# Φίλτρα (ίδια)
-st.sidebar.header("Φίλτρα")
-with st.sidebar.expander("🏫 Σχολεία", expanded=True):
-    perifereies = df["Περιφερειακή Ενότητα"].unique()
-    selected_perif = st.multiselect("Περιφερειακή Ενότητα", options=perifereies, default=perifereies, key="perif")
-    dimos = df[df["Περιφερειακή Ενότητα"].isin(selected_perif)]["Δήμος"].unique()
-    selected_dimos = st.multiselect("Δήμος", options=dimos, default=dimos, key="dimos")
-    eidos_sx = df["Είδος Σχολείου"].unique()
-    selected_eidos = st.multiselect("Είδος Σχολείου", options=eidos_sx, default=eidos_sx, key="eidos")
+# Sidebar filters
+st.sidebar.header("🔍 Φίλτρα Δεδομένων")
 
-with st.sidebar.expander("👩‍🏫 Εκπαιδευτικοί", expanded=True):
-    fylo_options = sorted(df["Φύλο"].dropna().unique().tolist())
-    selected_fylo = st.multiselect("Φύλο Εκπαιδευτικού", options=fylo_options, default=fylo_options, key="fylo")
-    eidikotita_options = sorted(df["Κωδικός Κύριας Ειδικότητας"].dropna().unique().tolist())
-    selected_eidikotita = st.multiselect("Ειδικότητα", options=eidikotita_options, default=eidikotita_options, key="eidik")
+selected_direction = st.sidebar.multiselect(
+    "Διεύθυνση", 
+    options=sorted(df['Διεύθυνση'].unique()),
+    default=[]
+)
 
-filtered_df = df[
-    (df["Περιφερειακή Ενότητα"].isin(selected_perif)) &
-    (df["Δήμος"].isin(selected_dimos)) &
-    (df["Είδος Σχολείου"].isin(selected_eidos))
-]
+selected_school_type = st.sidebar.multiselect(
+    "Είδος Σχολείου",
+    options=sorted(df['Είδος Σχολείου'].unique()),
+    default=[]
+)
 
-filtered_teachers_base = df[
-    (df["Περιφερειακή Ενότητα"].isin(selected_perif)) &
-    (df["Δήμος"].isin(selected_dimos)) &
-    (df["Είδος Σχολείου"].isin(selected_eidos)) &
-    (df["Φύλο"].isin(selected_fylo)) &
-    (df["Κωδικός Κύριας Ειδικότητας"].isin(selected_eidikotita))
-]
+selected_school_subtype = st.sidebar.multiselect(
+    "Τύπος Σχολείου",
+    options=sorted(df['Τύπος Σχολείου'].unique()),
+    default=[]
+)
 
-school_df = filtered_df.drop_duplicates(subset="Ονομασία Σχολείου")
-teachers_df = filtered_teachers_base.drop_duplicates(subset="ΑΦΜ")
+selected_region = st.sidebar.multiselect(
+    "Περιφερειακή Ενότητα",
+    options=sorted(df['Περιφερειακή Ενότητα'].unique()),
+    default=[]
+)
 
-tab1, tab2, tab3 = st.tabs(["Μαθητές", "Εκπαιδευτικοί", "Χάρτης & Αναλογίες"])
+selected_municipality = st.sidebar.multiselect(
+    "Δήμος",
+    options=sorted(df['Δήμος'].unique()),
+    default=[]
+)
 
+selected_gender = st.sidebar.multiselect(
+    "Φύλο Εκπαιδευτικού",
+    options=sorted(df['Φύλο'].unique()),
+    default=[]
+)
+
+selected_specialty = st.sidebar.multiselect(
+    "Κωδικός Κύριας Ειδικότητας",
+    options=sorted(df['Κωδικός Κύριας Ειδικότητας'].unique()),
+    default=[]
+)
+
+selected_employment = st.sidebar.multiselect(
+    "Σχέση Εργασίας",
+    options=sorted(df['Σχέση Εργασίας'].unique()),
+    default=[]
+)
+
+selected_placement = st.sidebar.multiselect(
+    "Σχέση Τοποθέτησης",
+    options=sorted(df['Σχέση Τοποθέτησης'].unique()),
+    default=[]
+)
+
+# Apply filters
+filtered_df = df.copy()
+if selected_direction:
+    filtered_df = filtered_df[filtered_df['Διεύθυνση'].isin(selected_direction)]
+if selected_school_type:
+    filtered_df = filtered_df[filtered_df['Είδος Σχολείου'].isin(selected_school_type)]
+if selected_school_subtype:
+    filtered_df = filtered_df[filtered_df['Τύπος Σχολείου'].isin(selected_school_subtype)]
+if selected_region:
+    filtered_df = filtered_df[filtered_df['Περιφερειακή Ενότητα'].isin(selected_region)]
+if selected_municipality:
+    filtered_df = filtered_df[filtered_df['Δήμος'].isin(selected_municipality)]
+if selected_gender:
+    filtered_df = filtered_df[filtered_df['Φύλο'].isin(selected_gender)]
+if selected_specialty:
+    filtered_df = filtered_df[filtered_df['Κωδικός Κύριας Ειδικότητας'].isin(selected_specialty)]
+if selected_employment:
+    filtered_df = filtered_df[filtered_df['Σχέση Εργασίας'].isin(selected_employment)]
+if selected_placement:
+    filtered_df = filtered_df[filtered_df['Σχέση Τοποθέτησης'].isin(selected_placement)]
+
+# Header
+st.markdown('<div class="main-header">🏫 Οπτικοποίηση Σχολικών Δεδομένων</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Πλήρης ανάλυση και οπτικοποίηση όλων των μεταβλητών του αρχείου</div>', unsafe_allow_html=True)
+
+# Metrics row
+st.subheader("📊 Βασικά Μεγέθη")
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+with col1:
+    st.metric("Συνολικές Εγγραφές", len(filtered_df))
+with col2:
+    st.metric("Μοναδικά Σχολεία", filtered_df['Ονομασία Σχολείου'].nunique())
+with col3:
+    st.metric("Μοναδικοί Εκπαιδευτικοί", filtered_df['ΑΦΜ'].nunique())
+with col4:
+    st.metric("Σύνολο Μαθητών", int(filtered_df['Σύνολο'].sum()))
+with col5:
+    st.metric("Σύνολο Αγοριών", int(filtered_df['Αγόρια'].sum()))
+with col6:
+    st.metric("Σύνολο Κοριτσιών", int(filtered_df['Κορίτσια'].sum()))
+
+st.divider()
+
+# Tabs
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📈 Γενικά Στατιστικά", 
+    "🏫 Στοιχεία Σχολείων", 
+    "👨‍🏫 Εκπαιδευτικοί",
+    "📚 Μαθητές",
+    "⏱️ Ωράριο & Αναθέσεις",
+    "🔗 Συσχετίσεις",
+    "📋 Πίνακας Δεδομένων"
+])
+
+# ==================== TAB 1: Γενικά Στατιστικά ====================
 with tab1:
-    st.header("Ανάλυση Μαθητών")
-    if school_df.empty:
-        st.warning("Δεν υπάρχουν δεδομένα με τα επιλεγμένα φίλτρα.")
-    else:
-        col1, col2 = st.columns(2)
-        with col1:
+    st.header("Γενικά Στατιστικά")
 
-            
-            st.subheader("Σύνολο Μαθητών ανά Δήμο")
-            students_by_dimos = school_df.groupby("Δήμος")[["Σύνολο"]].sum().reset_index()
-            # Ταξινόμηση φθίνουσα
-            students_by_dimos = students_by_dimos.sort_values("Σύνολο", ascending=False)
-            # Δημιουργία σύντομης στήλης (π.χ. 15 χαρακτήρες, προσθήκη "..." αν κόβεται)
-            students_by_dimos["Δήμος_Σύντομος"] = students_by_dimos["Δήμος"].apply(
-                lambda x: x[:15] + "..." if len(x) > 15 else x
-            )
-            fig1 = px.bar(students_by_dimos, x="Δήμος_Σύντομος", y="Σύνολο", color="Δήμος_Σύντομος", text_auto=True,
-              category_orders={"Δήμος_Σύντομος": students_by_dimos["Δήμος_Σύντομος"].tolist()})
-            fig1.update_layout(xaxis_tickangle=-45, showlegend=False, bargap=0.05)
-            fig1 = white_theme(fig1)
-            st.plotly_chart(fig1, use_container_width=True)
-            
+    row1_col1, row1_col2 = st.columns(2)
 
-        with col2:
-            st.subheader("Κατανομή Μαθητών ανά φύλο")
-            gender_agg = school_df.groupby("Τύπος Σχολείου")[["Αγόρια", "Κορίτσια"]].sum().reset_index()
-            gender_melt = gender_agg.melt(id_vars="Τύπος Σχολείου", value_vars=["Αγόρια", "Κορίτσια"],
-                                          var_name="Φύλο", value_name="Αριθμός")
-            fig2 = px.pie(gender_melt, names="Φύλο", values="Αριθμός", color="Φύλο", hole=0.4,
-                          hover_data=["Τύπος Σχολείου"])
-            fig2 = white_theme(fig2)
-            st.plotly_chart(fig2, use_container_width=True)
+    with row1_col1:
+        st.subheader("Κατανομή ανά Είδος Σχολείου")
+        school_type_counts = filtered_df['Είδος Σχολείου'].value_counts().reset_index()
+        school_type_counts.columns = ['Είδος Σχολείου', 'Πλήθος']
+        fig = px.pie(school_type_counts, values='Πλήθος', names='Είδος Σχολείου', 
+                     hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
 
-        col3, col4 = st.columns(2)
-        with col3:
-            st.subheader("Μέγεθος Σχολείων: Τμήματα vs Μαθητές")
-            school_agg = school_df[["Ονομασία Σχολείου", "Αριθμός Τμημάτων", "Σύνολο", "Δήμος", "Είδος Σχολείου"]]
-            fig3 = px.scatter(school_agg, x="Αριθμός Τμημάτων", y="Σύνολο",
-                              size="Σύνολο", color="Είδος Σχολείου",
-                              hover_name="Ονομασία Σχολείου", hover_data=["Δήμος"])
-            fig3 = white_theme(fig3)
-            st.plotly_chart(fig3, use_container_width=True)
+    with row1_col2:
+        st.subheader("Κατανομή ανά Περιφερειακή Ενότητα")
+        region_counts = filtered_df['Περιφερειακή Ενότητα'].value_counts().reset_index()
+        region_counts.columns = ['Περιφερειακή Ενότητα', 'Πλήθος']
+        fig = px.bar(region_counts, x='Περιφερειακή Ενότητα', y='Πλήθος', 
+                     color='Περιφερειακή Ενότητα', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-        with col4:
-            st.subheader("Heatmap: Μαθητές ανά Είδος Σχολείου & Δήμο")
-            heatmap_data = school_df.pivot_table(values="Σύνολο", index="Είδος Σχολείου",
-                                                 columns="Δήμος", aggfunc="sum", fill_value=0)
-            fig4 = px.imshow(heatmap_data, text_auto=True, aspect="auto", color_continuous_scale="Blues")
-            fig4 = white_theme(fig4)
-            st.plotly_chart(fig4, use_container_width=True)
+    row2_col1, row2_col2 = st.columns(2)
 
-        col5, col6 = st.columns(2)
-        with col5:
-            st.subheader("Ποσοστό Μαθητών ανά Είδος Σχολείου")
-            students_by_eidos = school_df.groupby("Είδος Σχολείου")[["Σύνολο"]].sum().reset_index()
-            fig5_students = px.pie(students_by_eidos, names="Είδος Σχολείου", values="Σύνολο", hole=0.4)
-            fig5_students.update_traces(textposition="inside", textinfo="percent+label")
-            fig5_students = white_theme(fig5_students)
-            st.plotly_chart(fig5_students, use_container_width=True)
+    with row2_col1:
+        st.subheader("Κατανομή ανά Διεύθυνση")
+        dir_counts = filtered_df['Διεύθυνση'].value_counts().reset_index()
+        dir_counts.columns = ['Διεύθυνση', 'Πλήθος']
+        fig = px.bar(dir_counts, x='Διεύθυνση', y='Πλήθος', 
+                     color='Διεύθυνση', color_discrete_sequence=px.colors.qualitative.Set2)
+        fig.update_layout(showlegend=False, xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
 
-        with col6:
-            st.subheader("Treemap: Κατανομή Μαθητών")
-            treemap_students = school_df.groupby(
-                ["Περιφερειακή Ενότητα", "Δήμος", "Είδος Σχολείου"]
-            ).agg(Αριθμός_Μαθητών=("Σύνολο", "sum")).reset_index()
-            fig6_students = px.treemap(
-                treemap_students,
-                path=["Περιφερειακή Ενότητα", "Δήμος", "Είδος Σχολείου"],
-                values="Αριθμός_Μαθητών",
-                color="Αριθμός_Μαθητών",
-                color_continuous_scale="Blues"
-            )
-            fig6_students.update_traces(textinfo="label+value+percent root")
-            fig6_students = white_theme(fig6_students)
-            st.plotly_chart(fig6_students, use_container_width=True)
+    with row2_col2:
+        st.subheader("Κατανομή ανά Τύπο Σχολείου (Top 15)")
+        type_counts = filtered_df['Τύπος Σχολείου'].value_counts().head(15).reset_index()
+        type_counts.columns = ['Τύπος Σχολείου', 'Πλήθος']
+        fig = px.bar(type_counts, x='Πλήθος', y='Τύπος Σχολείου', orientation='h',
+                     color='Πλήθος', color_continuous_scale='Viridis')
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
+    row3_col1, row3_col2 = st.columns(2)
+
+    with row3_col1:
+        st.subheader("Κατανομή ανά Δήμο (Top 15)")
+        mun_counts = filtered_df['Δήμος'].value_counts().head(15).reset_index()
+        mun_counts.columns = ['Δήμος', 'Πλήθος']
+        fig = px.bar(mun_counts, x='Πλήθος', y='Δήμος', orientation='h',
+                     color='Πλήθος', color_continuous_scale='Plasma')
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row3_col2:
+        st.subheader("Σχέση Εργασίας")
+        emp_counts = filtered_df['Σχέση Εργασίας'].value_counts().reset_index()
+        emp_counts.columns = ['Σχέση Εργασίας', 'Πλήθος']
+        fig = px.pie(emp_counts, values='Πλήθος', names='Σχέση Εργασίας',
+                     color_discrete_sequence=px.colors.qualitative.Bold)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 2: Στοιχεία Σχολείων ====================
 with tab2:
-    st.header("Ανάλυση Εκπαιδευτικών")
-    if teachers_df.empty:
-        st.warning("Δεν υπάρχουν δεδομένα εκπαιδευτικών με τα επιλεγμένα φίλτρα.")
-    else:
-        st.subheader("Εκπαιδευτικοί ανά Ειδικότητα & Φύλο (Top 10)")
-        spec_total = teachers_df.groupby("Κωδικός Κύριας Ειδικότητας").size().reset_index(name="Σύνολο")
-        top10_specs = spec_total.nlargest(10, "Σύνολο")["Κωδικός Κύριας Ειδικότητας"].tolist()
-        spec_gender = (
-            teachers_df[teachers_df["Κωδικός Κύριας Ειδικότητας"].isin(top10_specs)]
-            .groupby(["Κωδικός Κύριας Ειδικότητας", "Φύλο"])
-            .size()
-            .reset_index(name="Αριθμός")
-        )
-        spec_gender["sort_key"] = spec_gender.groupby("Κωδικός Κύριας Ειδικότητας")["Αριθμός"].transform("sum")
-        spec_gender = spec_gender.sort_values("sort_key", ascending=False)
-        ordered_specs = spec_gender["Κωδικός Κύριας Ειδικότητας"].unique().tolist()
-        fig5 = px.bar(spec_gender, x="Κωδικός Κύριας Ειδικότητας", y="Αριθμός",
-                      color="Φύλο", barmode="group",
-                      title="Top 10 Ειδικοτήτων ανά Φύλο",
-                      category_orders={"Κωδικός Κύριας Ειδικότητας": ordered_specs})
-        fig5.update_layout(xaxis_tickangle=-45)
-        fig5 = white_theme(fig5)
-        st.plotly_chart(fig5, use_container_width=True)
+    st.header("Στοιχεία Σχολείων")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Κατανομή Σχέσης Εργασίας")
-            def group_employment(val):
-                return "Μόνιμοι" if str(val) == "Μόνιμος" else "Μη Μόνιμοι"
-            employment_grouped = teachers_df["Σχέση Εργασίας"].apply(group_employment)
-            employment_pie = employment_grouped.value_counts().reset_index()
-            employment_pie.columns = ["Σχέση Εργασίας", "Αριθμός"]
-            fig6 = px.pie(employment_pie, names="Σχέση Εργασίας", values="Αριθμός")
-            fig6 = white_theme(fig6)
-            st.plotly_chart(fig6, use_container_width=True)
+    row1_col1, row1_col2 = st.columns(2)
 
-        with col2:
-            st.subheader("Κατανομή Φύλου Εκπαιδευτικών")
-            gender_teachers_pie = teachers_df["Φύλο"].value_counts().reset_index()
-            gender_teachers_pie.columns = ["Φύλο", "Αριθμός"]
-            fig_gender_teachers = px.pie(gender_teachers_pie, names="Φύλο", values="Αριθμός",
-                                         color="Φύλο",
-                                         color_discrete_map={"ΑΝΔΡΑΣ": "#1f77b4", "ΓΥΝΑΙΚΑ": "#e377c2"})
-            fig_gender_teachers = white_theme(fig_gender_teachers)
-            st.plotly_chart(fig_gender_teachers, use_container_width=True)
+    with row1_col1:
+        st.subheader("Αριθμός Τμημάτων ανά Σχολείο")
+        fig = px.histogram(filtered_df, x='Αριθμός Τμημάτων', nbins=30,
+                          color='Είδος Σχολείου', barmode='stack',
+                          color_discrete_sequence=px.colors.qualitative.Set1)
+        fig.update_layout(bargap=0.1)
+        st.plotly_chart(fig, use_container_width=True)
 
-        col3, col4 = st.columns(2)
-        with col3:
-            st.subheader("Κατανομή Διδακτικού Ωραρίου")
-            fig7 = px.histogram(teachers_df, x="Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης",
-                                nbins=10, color="Φύλο")
-            fig7 = white_theme(fig7)
-            st.plotly_chart(fig7, use_container_width=True)
+    with row1_col2:
+        st.subheader("Κατανομή Τμημάτων ανά Είδος Σχολείου")
+        sections_by_type = filtered_df.groupby('Είδος Σχολείου')['Αριθμός Τμημάτων'].sum().reset_index()
+        fig = px.pie(sections_by_type, values='Αριθμός Τμημάτων', names='Είδος Σχολείου',
+                     color_discrete_sequence=px.colors.qualitative.Set1)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
 
-        with col4:
-            st.subheader("Treemap: Γεωγραφική Κατανομή Εκπαιδευτικών")
-            treemap_data = teachers_df.groupby(["Περιφερειακή Ενότητα", "Δήμος", "Είδος Σχολείου"]).size().reset_index(name="Αριθμός")
-            fig8 = px.treemap(treemap_data, path=["Περιφερειακή Ενότητα", "Δήμος", "Είδος Σχολείου"],
-                              values="Αριθμός", color="Αριθμός")
-            fig8 = white_theme(fig8)
-            st.plotly_chart(fig8, use_container_width=True)
+    row2_col1, row2_col2 = st.columns(2)
 
+    with row2_col1:
+        st.subheader("Μέσος Αριθμός Τμημάτων ανά Τύπο Σχολείου")
+        avg_sections = filtered_df.groupby('Τύπος Σχολείου')['Αριθμός Τμημάτων'].mean().sort_values(ascending=False).head(15).reset_index()
+        avg_sections.columns = ['Τύπος Σχολείου', 'Μέσος Όρος Τμημάτων']
+        fig = px.bar(avg_sections, x='Μέσος Όρος Τμημάτων', y='Τύπος Σχολείου', orientation='h',
+                     color='Μέσος Όρος Τμημάτων', color_continuous_scale='Inferno')
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row2_col2:
+        st.subheader("Μέσος Αριθμός Τμημάτων ανά Περιφερειακή Ενότητα")
+        avg_sections_region = filtered_df.groupby('Περιφερειακή Ενότητα')['Αριθμός Τμημάτων'].mean().sort_values(ascending=False).reset_index()
+        avg_sections_region.columns = ['Περιφερειακή Ενότητα', 'Μέσος Όρος Τμημάτων']
+        fig = px.bar(avg_sections_region, x='Περιφερειακή Ενότητα', y='Μέσος Όρος Τμημάτων',
+                     color='Περιφερειακή Ενότητα', color_discrete_sequence=px.colors.qualitative.Dark24)
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Ανάλυση Σχολείων ανά Περιφερειακή Ενότητα και Είδος")
+    pivot_schools = filtered_df.pivot_table(
+        index='Περιφερειακή Ενότητα', 
+        columns='Είδος Σχολείου', 
+        values='Ονομασία Σχολείου', 
+        aggfunc='nunique'
+    ).fillna(0)
+    fig = px.imshow(pivot_schools, text_auto=True, aspect="auto",
+                    color_continuous_scale='Blues')
+    fig.update_layout(height=500)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 3: Εκπαιδευτικοί ====================
 with tab3:
-    st.header("Χάρτης Πελοποννήσου & Αναλογίες")
-    
-    @st.cache_data
-    def load_geojson():
-        geo_url = "https://raw.githubusercontent.com/peterdsp/greece-prefectures-and-units/main/greecePrefecturesUnits.geojson"
-        response = requests.get(geo_url)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error("Αποτυχία φόρτωσης GeoJSON.")
-            return None
-    
-    geo_data = load_geojson()
-    if geo_data:
-        peloponnese_units = ["ΑΡΓΟΛΙΔΑΣ", "ΑΡΚΑΔΙΑΣ", "ΚΟΡΙΝΘΙΑΣ", "ΛΑΚΩΝΙΑΣ", "ΜΕΣΣΗΝΙΑΣ"]
-        pel_df = df[df["Περιφερειακή Ενότητα"].isin(peloponnese_units)]
-        pel_school_df = pel_df.drop_duplicates(subset="Ονομασία Σχολείου")
-        pel_teachers_df = pel_df.drop_duplicates(subset="ΑΦΜ")
-        
-        map_data = pel_school_df.groupby("Περιφερειακή Ενότητα").agg(
-            Αριθμός_Σχολείων=("Ονομασία Σχολείου", "count"),
-            Αριθμός_Μαθητών=("Σύνολο", "sum")
-        ).reset_index()
-        teachers_count = pel_teachers_df.groupby("Περιφερειακή Ενότητα").size().reset_index(name="Αριθμός_Εκπαιδευτικών")
-        map_data = map_data.merge(teachers_count, on="Περιφερειακή Ενότητα", how="left").fillna(0)
-        map_data["Αναλογία Μαθητών/Εκπαιδευτικό"] = map_data["Αριθμός_Μαθητών"] / map_data["Αριθμός_Εκπαιδευτικών"].replace(0, 1)
-        
-        name_map = {
-            "ΑΡΓΟΛΙΔΑΣ": "ARGOLIDAS",
-            "ΑΡΚΑΔΙΑΣ": "ARCADIAS",
-            "ΚΟΡΙΝΘΙΑΣ": "CORINTHIAS",
-            "ΛΑΚΩΝΙΑΣ": "LAKONIAS",
-            "ΜΕΣΣΗΝΙΑΣ": "MESSINIAS"
-        }
-        map_data["Geo_Name"] = map_data["Περιφερειακή Ενότητα"].map(name_map)
-        
-        st.subheader("Διαδραστικός Χάρτης Πελοποννήσου")
-        color_discrete_map = {
-            "ARGOLIDAS": "#FF6B6B",
-            "ARCADIAS": "#4ECDC4",
-            "CORINTHIAS": "#45B7D1",
-            "LAKONIAS": "#FFBE0B",
-            "MESSINIAS": "#A05195"
-        }
-        fig_map = px.choropleth(
-            map_data,
-            geojson=geo_data,
-            locations="Geo_Name",
-            featureidkey="properties.name",
-            color="Περιφερειακή Ενότητα",
-            hover_data=["Αριθμός_Σχολείων", "Αριθμός_Εκπαιδευτικών", "Αναλογία Μαθητών/Εκπαιδευτικό"],
-            title="Στοιχεία ανά Περιφερειακή Ενότητα (Mouse over για λεπτομέρειες)",
-            color_discrete_map=color_discrete_map
-        )
-        fig_map.update_geos(visible=False, resolution=50, fitbounds="locations", showcountries=True, countrycolor="RebeccaPurple")
-        fig_map.update_layout(margin={"r": 0, "t": 50, "l": 0, "b": 0}, paper_bgcolor="white", plot_bgcolor="white")
-        fig_map = white_theme(fig_map)
-        st.plotly_chart(fig_map, use_container_width=True)
-        
-        total_students = map_data["Αριθμός_Μαθητών"].sum()
-        total_teachers = map_data["Αριθμός_Εκπαιδευτικών"].sum()
-        overall_ratio = total_students / total_teachers if total_teachers > 0 else 0
-        st.metric("Συνολική Αναλογία Μαθητών / Εκπαιδευτικό", f"{overall_ratio:.2f}")
+    st.header("👨‍🏫 Στοιχεία Εκπαιδευτικών")
 
-st.markdown("---")
-st.info("**")
+    row1_col1, row1_col2 = st.columns(2)
+
+    with row1_col1:
+        st.subheader("Φύλο Εκπαιδευτικών")
+        gender_counts = filtered_df['Φύλο'].value_counts().reset_index()
+        gender_counts.columns = ['Φύλο', 'Πλήθος']
+        colors = {'Θ': '#ff9999', 'Α': '#66b3ff'}
+        fig = px.pie(gender_counts, values='Πλήθος', names='Φύλο',
+                     color='Φύλο', color_discrete_map=colors)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row1_col2:
+        st.subheader("Κύριες Ειδικότητες (Top 15)")
+        spec_counts = filtered_df['Κωδικός Κύριας Ειδικότητας'].value_counts().head(15).reset_index()
+        spec_counts.columns = ['Ειδικότητα', 'Πλήθος']
+        fig = px.bar(spec_counts, x='Πλήθος', y='Ειδικότητα', orientation='h',
+                     color='Πλήθος', color_continuous_scale='Turbo')
+        st.plotly_chart(fig, use_container_width=True)
+
+    row2_col1, row2_col2 = st.columns(2)
+
+    with row2_col1:
+        st.subheader("Σχέση Τοποθέτησης")
+        place_counts = filtered_df['Σχέση Τοποθέτησης'].value_counts().reset_index()
+        place_counts.columns = ['Σχέση Τοποθέτησης', 'Πλήθος']
+        fig = px.bar(place_counts, x='Σχέση Τοποθέτησης', y='Πλήθος',
+                     color='Σχέση Τοποθέτησης', color_discrete_sequence=px.colors.qualitative.Prism)
+        fig.update_layout(showlegend=False, xaxis_tickangle=-30)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row2_col2:
+        st.subheader("Κατανομή Φύλου ανά Είδος Σχολείου")
+        gender_school = filtered_df.groupby(['Είδος Σχολείου', 'Φύλο']).size().reset_index(name='Πλήθος')
+        fig = px.bar(gender_school, x='Είδος Σχολείου', y='Πλήθος', color='Φύλο',
+                     barmode='group', color_discrete_map=colors)
+        fig.update_layout(xaxis_tickangle=-30)
+        st.plotly_chart(fig, use_container_width=True)
+
+    row3_col1, row3_col2 = st.columns(2)
+
+    with row3_col1:
+        st.subheader("Ειδικότητες ανά Είδος Σχολείου (Top 10)")
+        spec_school = filtered_df.groupby(['Είδος Σχολείου', 'Κωδικός Κύριας Ειδικότητας']).size().reset_index(name='Πλήθος')
+        spec_school = spec_school.sort_values('Πλήθος', ascending=False).head(10)
+        fig = px.bar(spec_school, x='Πλήθος', y='Κωδικός Κύριας Ειδικότητας', 
+                     color='Είδος Σχολείου', orientation='h',
+                     color_discrete_sequence=px.colors.qualitative.Vivid)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row3_col2:
+        st.subheader("Σχέση Εργασίας ανά Φύλο")
+        emp_gender = filtered_df.groupby(['Σχέση Εργασίας', 'Φύλο']).size().reset_index(name='Πλήθος')
+        fig = px.bar(emp_gender, x='Σχέση Εργασίας', y='Πλήθος', color='Φύλο',
+                     barmode='group', color_discrete_map=colors)
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης")
+    fig = px.histogram(filtered_df, x='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης',
+                      color='Είδος Σχολείου', nbins=20, barmode='stack',
+                      color_discrete_sequence=px.colors.qualitative.Safe)
+    fig.update_layout(bargap=0.1)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 4: Μαθητές ====================
+with tab4:
+    st.header("📚 Στοιχεία Μαθητών")
+
+    row1_col1, row1_col2, row1_col3 = st.columns(3)
+
+    with row1_col1:
+        st.subheader("Κατανομή Συνόλου Μαθητών")
+        fig = px.histogram(filtered_df, x='Σύνολο', nbins=50, 
+                          color_discrete_sequence=['#3366cc'])
+        fig.update_layout(bargap=0.05)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row1_col2:
+        st.subheader("Κατανομή Αγοριών")
+        fig = px.histogram(filtered_df, x='Αγόρια', nbins=50,
+                          color_discrete_sequence=['#66b3ff'])
+        fig.update_layout(bargap=0.05)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row1_col3:
+        st.subheader("Κατανομή Κοριτσιών")
+        fig = px.histogram(filtered_df, x='Κορίτσια', nbins=50,
+                          color_discrete_sequence=['#ff9999'])
+        fig.update_layout(bargap=0.05)
+        st.plotly_chart(fig, use_container_width=True)
+
+    row2_col1, row2_col2 = st.columns(2)
+
+    with row2_col1:
+        st.subheader("Σύνολο Μαθητών ανά Είδος Σχολείου")
+        students_by_type = filtered_df.groupby('Είδος Σχολείου')['Σύνολο'].sum().reset_index()
+        fig = px.pie(students_by_type, values='Σύνολο', names='Είδος Σχολείου',
+                     color_discrete_sequence=px.colors.qualitative.Set3)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row2_col2:
+        st.subheader("Σύνολο Μαθητών ανά Περιφερειακή Ενότητα")
+        students_by_region = filtered_df.groupby('Περιφερειακή Ενότητα')['Σύνολο'].sum().reset_index()
+        fig = px.bar(students_by_region, x='Περιφερειακή Ενότητα', y='Σύνολο',
+                     color='Περιφερειακή Ενότητα', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    row3_col1, row3_col2 = st.columns(2)
+
+    with row3_col1:
+        st.subheader("Αγόρια vs Κορίτσια ανά Είδος Σχολείου")
+        gender_students = filtered_df.groupby('Είδος Σχολείου')[['Αγόρια', 'Κορίτσια']].sum().reset_index()
+        gender_students_melted = gender_students.melt(id_vars='Είδος Σχολείου', 
+                                                       var_name='Φύλο Μαθητή', value_name='Πλήθος')
+        fig = px.bar(gender_students_melted, x='Είδος Σχολείου', y='Πλήθος', 
+                     color='Φύλο Μαθητή', barmode='group',
+                     color_discrete_map={'Αγόρια': '#66b3ff', 'Κορίτσια': '#ff9999'})
+        fig.update_layout(xaxis_tickangle=-30)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row3_col2:
+        st.subheader("Αναλογία Αγοριών/Κοριτσιών ανά Περιφερειακή Ενότητα")
+        ratio_df = filtered_df.groupby('Περιφερειακή Ενότητα')[['Αγόρια', 'Κορίτσια']].sum().reset_index()
+        ratio_df['Αναλογία Αγόρια/Κορίτσια'] = ratio_df['Αγόρια'] / ratio_df['Κορίτσια']
+        fig = px.bar(ratio_df, x='Περιφερειακή Ενότητα', y='Αναλογία Αγόρια/Κορίτσια',
+                     color='Αναλογία Αγόρια/Κορίτσια', color_continuous_scale='RdBu',
+                     color_continuous_midpoint=1)
+        fig.add_hline(y=1, line_dash="dash", line_color="black")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Μαθητές ανά Δήμο (Top 15)")
+    students_by_mun = filtered_df.groupby('Δήμος')[['Αγόρια', 'Κορίτσια', 'Σύνολο']].sum().sort_values('Σύνολο', ascending=False).head(15).reset_index()
+    students_by_mun_melted = students_by_mun.melt(id_vars='Δήμος', var_name='Κατηγορία', value_name='Πλήθος')
+    fig = px.bar(students_by_mun_melted, x='Δήμος', y='Πλήθος', color='Κατηγορία',
+                 barmode='group', color_discrete_map={'Αγόρια': '#66b3ff', 'Κορίτσια': '#ff9999', 'Σύνολο': '#99cc00'})
+    fig.update_layout(xaxis_tickangle=-45)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 5: Ωράριο & Αναθέσεις ====================
+with tab5:
+    st.header("⏱️ Υποχρεωτικό Ωράριο & Αναθέσεις")
+
+    row1_col1, row1_col2 = st.columns(2)
+
+    with row1_col1:
+        st.subheader("Κατανομή Ωραρίου Υπηρέτησης")
+        fig = px.box(filtered_df, x='Είδος Σχολείου', y='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης',
+                     color='Είδος Σχολείου', color_discrete_sequence=px.colors.qualitative.Set1)
+        fig.update_layout(showlegend=False, xaxis_tickangle=-30)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row1_col2:
+        st.subheader("Μέσο Ωράριο ανά Σχέση Εργασίας")
+        avg_hours = filtered_df.groupby('Σχέση Εργασίας')['Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης'].mean().sort_values(ascending=False).reset_index()
+        avg_hours.columns = ['Σχέση Εργασίας', 'Μέσο Ωράριο']
+        fig = px.bar(avg_hours, x='Σχέση Εργασίας', y='Μέσο Ωράριο',
+                     color='Μέσο Ωράριο', color_continuous_scale='Magma')
+        fig.update_layout(showlegend=False, xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+
+    row2_col1, row2_col2 = st.columns(2)
+
+    with row2_col1:
+        st.subheader("Α Ανάθεση Συνολικά")
+        fig = px.histogram(filtered_df[filtered_df['Α Ανάθεση Συνολικά'] > 0], 
+                          x='Α Ανάθεση Συνολικά', nbins=30,
+                          color='Είδος Σχολείου', barmode='stack',
+                          color_discrete_sequence=px.colors.qualitative.Set2)
+        fig.update_layout(bargap=0.1)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row2_col2:
+        st.subheader("Β Ανάθεση Συνολικά")
+        fig = px.histogram(filtered_df[filtered_df['Β Ανάθεση Συνολικά'] > 0], 
+                          x='Β Ανάθεση Συνολικά', nbins=20,
+                          color='Είδος Σχολείου', barmode='stack',
+                          color_discrete_sequence=px.colors.qualitative.Set2)
+        fig.update_layout(bargap=0.1)
+        st.plotly_chart(fig, use_container_width=True)
+
+    row3_col1, row3_col2 = st.columns(2)
+
+    with row3_col1:
+        st.subheader("Προσθετικά Τμήματα")
+        fig = px.histogram(filtered_df[filtered_df['Προσθ Τμημ Συνολικά'] > 0], 
+                          x='Προσθ Τμημ Συνολικά', nbins=20,
+                          color='Είδος Σχολείου', barmode='stack',
+                          color_discrete_sequence=px.colors.qualitative.Set3)
+        fig.update_layout(bargap=0.1)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row3_col2:
+        st.subheader("Άλλες Αναθέσεις")
+        fig = px.histogram(filtered_df[filtered_df['Άλλες Αναθέσεις Συνολικά'] > 0], 
+                          x='Άλλες Αναθέσεις Συνολικά', nbins=20,
+                          color='Είδος Σχολείου', barmode='stack',
+                          color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_layout(bargap=0.1)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Συνολικές Αναθέσεις ανά Εκπαιδευτικό (Top 20)")
+    assignments = filtered_df.groupby('ΑΦΜ')[['Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 
+                                               'Γ Ανάθεση Συνολικά', 'Προσθ Τμημ Συνολικά', 
+                                               'Άλλες Αναθέσεις Συνολικά']].sum()
+    assignments['Σύνολο Αναθέσεων'] = assignments.sum(axis=1)
+    top_assignments = assignments.sort_values('Σύνολο Αναθέσεων', ascending=False).head(20).reset_index()
+    top_assignments_melted = top_assignments.melt(
+        id_vars='ΑΦΜ', 
+        value_vars=['Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 'Γ Ανάθεση Συνολικά', 
+                    'Προσθ Τμημ Συνολικά', 'Άλλες Αναθέσεις Συνολικά'],
+        var_name='Τύπος Ανάθεσης', value_name='Ώρες'
+    )
+    fig = px.bar(top_assignments_melted, x='ΑΦΜ', y='Ώρες', color='Τύπος Ανάθεσης',
+                 barmode='stack', color_discrete_sequence=px.colors.qualitative.Bold)
+    fig.update_layout(xaxis_tickangle=-45)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Συσχέτιση Ωραρίου με Αναθέσεις")
+    fig = px.scatter(filtered_df, x='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης', 
+                     y='Α Ανάθεση Συνολικά', color='Είδος Σχολείου',
+                     size='Σύνολο', hover_data=['Ονομασία Σχολείου'],
+                     color_discrete_sequence=px.colors.qualitative.Set1,
+                     opacity=0.6)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 6: Συσχετίσεις ====================
+with tab6:
+    st.header("🔗 Συσχετίσεις Μεταβλητών")
+
+    numeric_cols = ['Αριθμός Τμημάτων', 'Αγόρια', 'Κορίτσια', 'Σύνολο', 
+                    'Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης',
+                    'Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 
+                    'Προσθ Τμημ Συνολικά', 'Άλλες Αναθέσεις Συνολικά']
+
+    corr_matrix = filtered_df[numeric_cols].corr()
+
+    st.subheader("Πίνακας Συσχέτισης")
+    fig = px.imshow(corr_matrix, text_auto='.2f', aspect="auto",
+                    color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
+    fig.update_layout(height=700)
+    st.plotly_chart(fig, use_container_width=True)
+
+    row1_col1, row1_col2 = st.columns(2)
+
+    with row1_col1:
+        st.subheader("Αγόρια vs Σύνολο Μαθητών")
+        fig = px.scatter(filtered_df, x='Αγόρια', y='Σύνολο', 
+                         color='Είδος Σχολείου', trendline='ols',
+                         color_discrete_sequence=px.colors.qualitative.Set1,
+                         opacity=0.6)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row1_col2:
+        st.subheader("Κορίτσια vs Σύνολο Μαθητών")
+        fig = px.scatter(filtered_df, x='Κορίτσια', y='Σύνολο', 
+                         color='Είδος Σχολείου', trendline='ols',
+                         color_discrete_sequence=px.colors.qualitative.Set1,
+                         opacity=0.6)
+        st.plotly_chart(fig, use_container_width=True)
+
+    row2_col1, row2_col2 = st.columns(2)
+
+    with row2_col1:
+        st.subheader("Τμήματα vs Σύνολο Μαθητών")
+        fig = px.scatter(filtered_df, x='Αριθμός Τμημάτων', y='Σύνολο', 
+                         color='Είδος Σχολείου', trendline='ols',
+                         color_discrete_sequence=px.colors.qualitative.Set1,
+                         opacity=0.6)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with row2_col2:
+        st.subheader("Αγόρια vs Κορίτσια")
+        fig = px.scatter(filtered_df, x='Αγόρια', y='Κορίτσια', 
+                         color='Είδος Σχολείου', trendline='ols',
+                         color_discrete_sequence=px.colors.qualitative.Set1,
+                         opacity=0.6)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Pair Plot - Βασικές Μετρήσεις")
+    pair_cols = ['Αριθμός Τμημάτων', 'Αγόρια', 'Κορίτσια', 'Σύνολο']
+    fig = px.scatter_matrix(filtered_df, dimensions=pair_cols, 
+                            color='Είδος Σχολείου',
+                            color_discrete_sequence=px.colors.qualitative.Set1,
+                            opacity=0.5)
+    fig.update_layout(height=800)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ==================== TAB 7: Πίνακας Δεδομένων ====================
+with tab7:
+    st.header("📋 Πίνακας Δεδομένων")
+
+    st.write(f"Εμφανίζονται {len(filtered_df)} από {len(df)} εγγραφές")
+
+    # Column selector
+    all_columns = filtered_df.columns.tolist()
+    selected_columns = st.multiselect("Επιλέξτε Στήλες", options=all_columns, default=all_columns)
+
+    # Show dataframe
+    st.dataframe(filtered_df[selected_columns], use_container_width=True, height=600)
+
+    # Download button
+    csv = filtered_df[selected_columns].to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Λήψη CSV",
+        data=csv,
+        file_name='filtered_school_data.csv',
+        mime='text/csv'
+    )
+
+    # Summary statistics
+    st.subheader("Στατιστικά Στοιχεία Αριθμητικών Μεταβλητών")
+    st.dataframe(filtered_df[selected_columns].describe(), use_container_width=True)
+
+# Footer
+st.divider()
+st.markdown("""
+<div style="text-align: center; color: #888;">
+    <p>🏫 Dashboard Οπτικοποίησης Σχολικών Δεδομένων | Δημιουργήθηκε με Streamlit & Plotly</p>
+</div>
+""", unsafe_allow_html=True)
