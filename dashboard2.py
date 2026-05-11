@@ -140,24 +140,26 @@ if selected_placement:
     filtered_df = filtered_df[filtered_df['Σχέση Τοποθέτησης'].isin(selected_placement)]
 
 # Header
-st.markdown('<div class="main-header">🏫 Οπτικοποίηση Σχολικών Δεδομένων</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Πλήρης ανάλυση και οπτικοποίηση όλων των μεταβλητών του αρχείου</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏫 Οπτικοποίηση Σχολικών Δεδομένων ΠΔΕ ΠΕΛΟΠΟΝΝΗΣΟΥ</div>', unsafe_allow_html=True)
+
+# Υπολογισμός με βάση τα μοναδικά σχολεία για αποφυγή διπλοεγγραφών
+unique_schools_df = filtered_df.drop_duplicates(subset=['Ονομασία Σχολείου'])
 
 # Metrics row
 st.subheader("📊 Βασικά Μεγέθη")
-col1, col2, col3, col4, col5, col6 = st.columns(6)
-with col1:
-    st.metric("Συνολικές Εγγραφές", len(filtered_df))
+col2, col3, col4, col5, col6 = st.columns(5)
+#with col1:
+#    st.metric("Συνολικές Εγγραφές", len(filtered_df))
 with col2:
-    st.metric("Μοναδικά Σχολεία", filtered_df['Ονομασία Σχολείου'].nunique())
+    st.metric("Σύνολο Σχολείων", filtered_df['Ονομασία Σχολείου'].nunique())
 with col3:
-    st.metric("Μοναδικοί Εκπαιδευτικοί", filtered_df['ΑΦΜ'].nunique())
+    st.metric("Σύνολο Εκπαιδευτικών", filtered_df['ΑΦΜ'].nunique())
 with col4:
-    st.metric("Σύνολο Μαθητών", int(filtered_df['Σύνολο'].sum()))
+    st.metric("Σύνολο Μαθητών", int(unique_schools_df['Σύνολο'].sum()))
 with col5:
-    st.metric("Σύνολο Αγοριών", int(filtered_df['Αγόρια'].sum()))
+    st.metric("Σύνολο Αγοριών", int(unique_schools_df['Αγόρια'].sum()))
 with col6:
-    st.metric("Σύνολο Κοριτσιών", int(filtered_df['Κορίτσια'].sum()))
+    st.metric("Σύνολο Κοριτσιών", int(unique_schools_df['Κορίτσια'].sum()))
 
 st.divider()
 
