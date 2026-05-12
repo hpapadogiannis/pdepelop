@@ -510,23 +510,7 @@ with tab5:
         fig.update_layout(bargap=0.1)
         st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Συνολικές Αναθέσεις ανά Εκπαιδευτικό (Top 20)")
-    assignments = filtered_df.groupby('ΑΦΜ')[['Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 
-                                               'Γ Ανάθεση Συνολικά', 'Προσθ Τμημ Συνολικά', 
-                                               'Άλλες Αναθέσεις Συνολικά']].sum()
-    assignments['Σύνολο Αναθέσεων'] = assignments.sum(axis=1)
-    top_assignments = assignments.sort_values('Σύνολο Αναθέσεων', ascending=False).head(20).reset_index()
-    top_assignments_melted = top_assignments.melt(
-        id_vars='ΑΦΜ', 
-        value_vars=['Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 'Γ Ανάθεση Συνολικά', 
-                    'Προσθ Τμημ Συνολικά', 'Άλλες Αναθέσεις Συνολικά'],
-        var_name='Τύπος Ανάθεσης', value_name='Ώρες'
-    )
-    fig = px.bar(top_assignments_melted, x='ΑΦΜ', y='Ώρες', color='Τύπος Ανάθεσης',
-                 barmode='stack', color_discrete_sequence=px.colors.qualitative.Bold)
-    fig.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True)
-
+    
     st.subheader("Συσχέτιση Ωραρίου με Αναθέσεις")
     fig = px.scatter(unique_schools_df, x='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης', 
                      y='Α Ανάθεση Συνολικά', color='Είδος Σχολείου',
