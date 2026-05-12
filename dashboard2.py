@@ -9,7 +9,7 @@ import numpy as np
 # Page config
 st.set_page_config(
     page_title="Οπτικοποίηση Σχολικών Δεδομένων",
-    page_icon="🏫",
+    page_icon="logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
