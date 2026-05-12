@@ -44,6 +44,10 @@ st.markdown("""
         padding: 10px 20px;
         font-weight: 600;
     }
+    .stTabs [data-baseweb="tab"] p {
+        font-weight: 900 !important;
+        color: black !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
