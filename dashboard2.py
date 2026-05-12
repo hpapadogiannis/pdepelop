@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,7 +8,7 @@ import numpy as np
 # Page config
 st.set_page_config(
     page_title="Οπτικοποίηση Σχολικών Δεδομένων",
-    page_icon="logo.png",
+    page_icon="🏫",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -139,17 +138,20 @@ if selected_employment:
 if selected_placement:
     filtered_df = filtered_df[filtered_df['Σχέση Τοποθέτησης'].isin(selected_placement)]
 
+# =============================================================================
+# ΥΠΟΛΟΓΙΣΜΟΣ ΜΟΝΑΔΙΚΩΝ ΣΧΟΛΕΙΩΝ (για αποφυγή διπλομετρήσεων στους μαθητές)
+# =============================================================================
+# Τα στοιχεία μαθητών (Αγόρια, Κορίτσια, Σύνολο) επαναλαμβάνονται σε κάθε γραμμή
+# εκπαιδευτικού του ίδιου σχολείου. Για σωστούς υπολογισμούς μαθητών χρησιμοποιούμε
+# μόνο μία γραμμή ανά σχολείο.
+unique_schools_df = filtered_df.drop_duplicates(subset=['Ονομασία Σχολείου'])
+
 # Header
 st.markdown('<div class="main-header">🏫 Οπτικοποίηση Σχολικών Δεδομένων ΠΔΕ ΠΕΛΟΠΟΝΝΗΣΟΥ</div>', unsafe_allow_html=True)
-
-# Υπολογισμός με βάση τα μοναδικά σχολεία για αποφυγή διπλοεγγραφών
-unique_schools_df = filtered_df.drop_duplicates(subset=['Ονομασία Σχολείου'])
 
 # Metrics row
 st.subheader("📊 Βασικά Μεγέθη")
 col2, col3, col4, col5, col6 = st.columns(5)
-#with col1:
-#    st.metric("Συνολικές Εγγραφές", len(filtered_df))
 with col2:
     st.metric("Σύνολο Σχολείων", filtered_df['Ονομασία Σχολείου'].nunique())
 with col3:
@@ -363,25 +365,31 @@ with tab3:
 with tab4:
     st.header("📚 Στοιχεία Μαθητών")
 
+    st.info("""
+    ℹ️ **Σημείωση:** Τα διαγράμματα μαθητών υπολογίζονται με βάση τα **μοναδικά σχολεία** 
+    (μία μέτρηση ανά σχολείο), για να αποφευχθεί η διπλομέτρηση λόγω πολλαπλών εκπαιδευτικών 
+    ανά σχολείο.
+    """)
+
     row1_col1, row1_col2, row1_col3 = st.columns(3)
 
     with row1_col1:
         st.subheader("Κατανομή Συνόλου Μαθητών")
-        fig = px.histogram(filtered_df, x='Σύνολο', nbins=50, 
+        fig = px.histogram(unique_schools_df, x='Σύνολο', nbins=50, 
                           color_discrete_sequence=['#3366cc'])
         fig.update_layout(bargap=0.05)
         st.plotly_chart(fig, use_container_width=True)
 
     with row1_col2:
         st.subheader("Κατανομή Αγοριών")
-        fig = px.histogram(filtered_df, x='Αγόρια', nbins=50,
+        fig = px.histogram(unique_schools_df, x='Αγόρια', nbins=50,
                           color_discrete_sequence=['#66b3ff'])
         fig.update_layout(bargap=0.05)
         st.plotly_chart(fig, use_container_width=True)
 
     with row1_col3:
         st.subheader("Κατανομή Κοριτσιών")
-        fig = px.histogram(filtered_df, x='Κορίτσια', nbins=50,
+        fig = px.histogram(unique_schools_df, x='Κορίτσια', nbins=50,
                           color_discrete_sequence=['#ff9999'])
         fig.update_layout(bargap=0.05)
         st.plotly_chart(fig, use_container_width=True)
@@ -390,7 +398,7 @@ with tab4:
 
     with row2_col1:
         st.subheader("Σύνολο Μαθητών ανά Είδος Σχολείου")
-        students_by_type = filtered_df.groupby('Είδος Σχολείου')['Σύνολο'].sum().reset_index()
+        students_by_type = unique_schools_df.groupby('Είδος Σχολείου')['Σύνολο'].sum().reset_index()
         fig = px.pie(students_by_type, values='Σύνολο', names='Είδος Σχολείου',
                      color_discrete_sequence=px.colors.qualitative.Set3)
         fig.update_traces(textposition='inside', textinfo='percent+label')
@@ -398,7 +406,7 @@ with tab4:
 
     with row2_col2:
         st.subheader("Σύνολο Μαθητών ανά Περιφερειακή Ενότητα")
-        students_by_region = filtered_df.groupby('Περιφερειακή Ενότητα')['Σύνολο'].sum().reset_index()
+        students_by_region = unique_schools_df.groupby('Περιφερειακή Ενότητα')['Σύνολο'].sum().reset_index()
         fig = px.bar(students_by_region, x='Περιφερειακή Ενότητα', y='Σύνολο',
                      color='Περιφερειακή Ενότητα', color_discrete_sequence=px.colors.qualitative.Pastel)
         fig.update_layout(showlegend=False)
@@ -408,7 +416,7 @@ with tab4:
 
     with row3_col1:
         st.subheader("Αγόρια vs Κορίτσια ανά Είδος Σχολείου")
-        gender_students = filtered_df.groupby('Είδος Σχολείου')[['Αγόρια', 'Κορίτσια']].sum().reset_index()
+        gender_students = unique_schools_df.groupby('Είδος Σχολείου')[['Αγόρια', 'Κορίτσια']].sum().reset_index()
         gender_students_melted = gender_students.melt(id_vars='Είδος Σχολείου', 
                                                        var_name='Φύλο Μαθητή', value_name='Πλήθος')
         fig = px.bar(gender_students_melted, x='Είδος Σχολείου', y='Πλήθος', 
@@ -419,7 +427,7 @@ with tab4:
 
     with row3_col2:
         st.subheader("Αναλογία Αγοριών/Κοριτσιών ανά Περιφερειακή Ενότητα")
-        ratio_df = filtered_df.groupby('Περιφερειακή Ενότητα')[['Αγόρια', 'Κορίτσια']].sum().reset_index()
+        ratio_df = unique_schools_df.groupby('Περιφερειακή Ενότητα')[['Αγόρια', 'Κορίτσια']].sum().reset_index()
         ratio_df['Αναλογία Αγόρια/Κορίτσια'] = ratio_df['Αγόρια'] / ratio_df['Κορίτσια']
         fig = px.bar(ratio_df, x='Περιφερειακή Ενότητα', y='Αναλογία Αγόρια/Κορίτσια',
                      color='Αναλογία Αγόρια/Κορίτσια', color_continuous_scale='RdBu',
@@ -429,7 +437,7 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Μαθητές ανά Δήμο (Top 15)")
-    students_by_mun = filtered_df.groupby('Δήμος')[['Αγόρια', 'Κορίτσια', 'Σύνολο']].sum().sort_values('Σύνολο', ascending=False).head(15).reset_index()
+    students_by_mun = unique_schools_df.groupby('Δήμος')[['Αγόρια', 'Κορίτσια', 'Σύνολο']].sum().sort_values('Σύνολο', ascending=False).head(15).reset_index()
     students_by_mun_melted = students_by_mun.melt(id_vars='Δήμος', var_name='Κατηγορία', value_name='Πλήθος')
     fig = px.bar(students_by_mun_melted, x='Δήμος', y='Πλήθος', color='Κατηγορία',
                  barmode='group', color_discrete_map={'Αγόρια': '#66b3ff', 'Κορίτσια': '#ff9999', 'Σύνολο': '#99cc00'})
@@ -516,7 +524,7 @@ with tab5:
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Συσχέτιση Ωραρίου με Αναθέσεις")
-    fig = px.scatter(filtered_df, x='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης', 
+    fig = px.scatter(unique_schools_df, x='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης', 
                      y='Α Ανάθεση Συνολικά', color='Είδος Σχολείου',
                      size='Σύνολο', hover_data=['Ονομασία Σχολείου'],
                      color_discrete_sequence=px.colors.qualitative.Set1,
@@ -527,14 +535,19 @@ with tab5:
 with tab6:
     st.header("🔗 Συσχετίσεις Μεταβλητών")
 
+    st.info("""
+    ℹ️ **Σημείωση:** Τα scatter plots που αφορούν μαθητές χρησιμοποιούν μία μέτρηση 
+    ανά σχολείο για να αποφευχθεί η διπλομέτρηση.
+    """)
+
     numeric_cols = ['Αριθμός Τμημάτων', 'Αγόρια', 'Κορίτσια', 'Σύνολο', 
                     'Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης',
                     'Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 
                     'Προσθ Τμημ Συνολικά', 'Άλλες Αναθέσεις Συνολικά']
 
-    corr_matrix = filtered_df[numeric_cols].corr()
+    corr_matrix = unique_schools_df[numeric_cols].corr()
 
-    st.subheader("Πίνακας Συσχέτισης")
+    st.subheader("Πίνακας Συσχέτισης (επίπεδο Σχολείου)")
     fig = px.imshow(corr_matrix, text_auto='.2f', aspect="auto",
                     color_continuous_scale='RdBu_r', zmin=-1, zmax=1)
     fig.update_layout(height=700)
@@ -544,7 +557,7 @@ with tab6:
 
     with row1_col1:
         st.subheader("Αγόρια vs Σύνολο Μαθητών")
-        fig = px.scatter(filtered_df, x='Αγόρια', y='Σύνολο', 
+        fig = px.scatter(unique_schools_df, x='Αγόρια', y='Σύνολο', 
                          color='Είδος Σχολείου', trendline='ols',
                          color_discrete_sequence=px.colors.qualitative.Set1,
                          opacity=0.6)
@@ -552,7 +565,7 @@ with tab6:
 
     with row1_col2:
         st.subheader("Κορίτσια vs Σύνολο Μαθητών")
-        fig = px.scatter(filtered_df, x='Κορίτσια', y='Σύνολο', 
+        fig = px.scatter(unique_schools_df, x='Κορίτσια', y='Σύνολο', 
                          color='Είδος Σχολείου', trendline='ols',
                          color_discrete_sequence=px.colors.qualitative.Set1,
                          opacity=0.6)
@@ -562,7 +575,7 @@ with tab6:
 
     with row2_col1:
         st.subheader("Τμήματα vs Σύνολο Μαθητών")
-        fig = px.scatter(filtered_df, x='Αριθμός Τμημάτων', y='Σύνολο', 
+        fig = px.scatter(unique_schools_df, x='Αριθμός Τμημάτων', y='Σύνολο', 
                          color='Είδος Σχολείου', trendline='ols',
                          color_discrete_sequence=px.colors.qualitative.Set1,
                          opacity=0.6)
@@ -570,15 +583,15 @@ with tab6:
 
     with row2_col2:
         st.subheader("Αγόρια vs Κορίτσια")
-        fig = px.scatter(filtered_df, x='Αγόρια', y='Κορίτσια', 
+        fig = px.scatter(unique_schools_df, x='Αγόρια', y='Κορίτσια', 
                          color='Είδος Σχολείου', trendline='ols',
                          color_discrete_sequence=px.colors.qualitative.Set1,
                          opacity=0.6)
         st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Pair Plot - Βασικές Μετρήσεις")
+    st.subheader("Pair Plot - Βασικές Μετρήσεις (επίπεδο Σχολείου)")
     pair_cols = ['Αριθμός Τμημάτων', 'Αγόρια', 'Κορίτσια', 'Σύνολο']
-    fig = px.scatter_matrix(filtered_df, dimensions=pair_cols, 
+    fig = px.scatter_matrix(unique_schools_df, dimensions=pair_cols, 
                             color='Είδος Σχολείου',
                             color_discrete_sequence=px.colors.qualitative.Set1,
                             opacity=0.5)
