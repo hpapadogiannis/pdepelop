@@ -75,7 +75,7 @@ selected_direction = st.sidebar.multiselect(
 
 selected_school_type = st.sidebar.multiselect(
     "Είδος Σχολείου",
-    options=sorted(df['Είδος Σχολείου'].unique()),
+    options = sorted(df['Είδος Σχολείου'].dropna().unique()),
     default=[]
 )
 
@@ -99,25 +99,25 @@ selected_municipality = st.sidebar.multiselect(
 
 selected_gender = st.sidebar.multiselect(
     "Φύλο Εκπαιδευτικού",
-    options=sorted(df['Φύλο'].unique()),
+    options=sorted(df['Φύλο'].dropna().unique()),
     default=[]
 )
 
 selected_specialty = st.sidebar.multiselect(
     "Κωδικός Κύριας Ειδικότητας",
-    options=sorted(df['Κωδικός Κύριας Ειδικότητας'].unique()),
+    options=sorted(df['Κωδικός Κύριας Ειδικότητας'].dropna().unique()),
     default=[]
 )
 
 selected_employment = st.sidebar.multiselect(
     "Σχέση Εργασίας",
-    options=sorted(df['Σχέση Εργασίας'].unique()),
+    options=sorted(df['Σχέση Εργασίας'].dropna().unique()),
     default=[]
 )
 
 selected_placement = st.sidebar.multiselect(
     "Σχέση Τοποθέτησης",
-    options=sorted(df['Σχέση Τοποθέτησης'].unique()),
+    options=sorted(df['Σχέση Τοποθέτησης'].dropna().unique()),
     default=[]
 )
 
@@ -369,11 +369,6 @@ with tab3:
 with tab4:
     st.header("📚 Στοιχεία Μαθητών")
 
-    st.info("""
-    ℹ️ **Σημείωση:** Τα διαγράμματα μαθητών υπολογίζονται με βάση τα **μοναδικά σχολεία** 
-    (μία μέτρηση ανά σχολείο), για να αποφευχθεί η διπλομέτρηση λόγω πολλαπλών εκπαιδευτικών 
-    ανά σχολείο.
-    """)
 
     row1_col1, row1_col2, row1_col3 = st.columns(3)
 
@@ -472,66 +467,15 @@ with tab5:
 
     row2_col1, row2_col2 = st.columns(2)
 
-    with row2_col1:
-        st.subheader("Α Ανάθεση Συνολικά")
-        fig = px.histogram(filtered_df[filtered_df['Α Ανάθεση Συνολικά'] > 0], 
-                          x='Α Ανάθεση Συνολικά', nbins=30,
-                          color='Είδος Σχολείου', barmode='stack',
-                          color_discrete_sequence=px.colors.qualitative.Set2)
-        fig.update_layout(bargap=0.1)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with row2_col2:
-        st.subheader("Β Ανάθεση Συνολικά")
-        fig = px.histogram(filtered_df[filtered_df['Β Ανάθεση Συνολικά'] > 0], 
-                          x='Β Ανάθεση Συνολικά', nbins=20,
-                          color='Είδος Σχολείου', barmode='stack',
-                          color_discrete_sequence=px.colors.qualitative.Set2)
-        fig.update_layout(bargap=0.1)
-        st.plotly_chart(fig, use_container_width=True)
-
-    row3_col1, row3_col2 = st.columns(2)
-
-    with row3_col1:
-        st.subheader("Προσθετικά Τμήματα")
-        fig = px.histogram(filtered_df[filtered_df['Προσθ Τμημ Συνολικά'] > 0], 
-                          x='Προσθ Τμημ Συνολικά', nbins=20,
-                          color='Είδος Σχολείου', barmode='stack',
-                          color_discrete_sequence=px.colors.qualitative.Set3)
-        fig.update_layout(bargap=0.1)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with row3_col2:
-        st.subheader("Άλλες Αναθέσεις")
-        fig = px.histogram(filtered_df[filtered_df['Άλλες Αναθέσεις Συνολικά'] > 0], 
-                          x='Άλλες Αναθέσεις Συνολικά', nbins=20,
-                          color='Είδος Σχολείου', barmode='stack',
-                          color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig.update_layout(bargap=0.1)
-        st.plotly_chart(fig, use_container_width=True)
-
     
-    st.subheader("Συσχέτιση Ωραρίου με Αναθέσεις")
-    fig = px.scatter(unique_schools_df, x='Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης', 
-                     y='Α Ανάθεση Συνολικά', color='Είδος Σχολείου',
-                     size='Σύνολο', hover_data=['Ονομασία Σχολείου'],
-                     color_discrete_sequence=px.colors.qualitative.Set1,
-                     opacity=0.6)
-    st.plotly_chart(fig, use_container_width=True)
-
 # ==================== TAB 6: Συσχετίσεις ====================
 with tab6:
     st.header("🔗 Συσχετίσεις Μεταβλητών")
 
-    st.info("""
-    ℹ️ **Σημείωση:** Τα scatter plots που αφορούν μαθητές χρησιμοποιούν μία μέτρηση 
-    ανά σχολείο για να αποφευχθεί η διπλομέτρηση.
-    """)
+
 
     numeric_cols = ['Αριθμός Τμημάτων', 'Αγόρια', 'Κορίτσια', 'Σύνολο', 
-                    'Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης',
-                    'Α Ανάθεση Συνολικά', 'Β Ανάθεση Συνολικά', 
-                    'Προσθ Τμημ Συνολικά', 'Άλλες Αναθέσεις Συνολικά']
+                    'Υποχρεωτικό Διδακτικό Ωράριο Υπηρέτησης']
 
     corr_matrix = unique_schools_df[numeric_cols].corr()
 
