@@ -473,6 +473,6 @@ with main_tab2:
 st.divider()
 st.markdown("""
 <div style="text-align: center; color: #888;">
-    <p>🏫 Dashboard Οπτικοποίησης Σχολικών Δεδομένων | Δημιουργήθηκε με Streamlit & Plotly</p>
+    <p>🏫 Dashboard Οπτικοποίησης Σχολικών Δεδομένων | Δημιουργήθηκε από τον Ηλία Παπαδόγιαννη με την χρήση Streamlit & Plotly</p>
 </div>
 """, unsafe_allow_html=True)
